@@ -233,10 +233,10 @@ async function run() {
     // payment related api //
     app.post('/api/v1/payments', async(req, res) => {
       const payment = req.body;
-      
+
       const paymentResult = await paymentCollection.insertOne(payment);
 
-      console.log('payment info', payment);
+      // console.log('payment info', payment);
 
       // for delete cartIds // 
       const query = {_id : {
@@ -247,6 +247,49 @@ async function run() {
 
 
       res.send({paymentResult, deleteResult});
+    })
+
+    app.get('/api/v1/createPayments/:email', verifyToken, async(req, res) => {
+      const query = { email : req.params.email };
+      if( req.params.email !== req.decoded.email ){
+        return res.status(403).send({message : 'forbidden access'});
+      }
+
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    // stats or analytics //
+
+    app.get('/api/v1/adminStats', verifyToken, verifyAdmin, async(req, res) => {
+      const users = await userCollections.estimatedDocumentCount();
+      const menuItems = await menuCollections.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+
+      // this is not the best way //
+      // const payments = await paymentCollection.find().toArray();
+
+      // const revenue = payments.reduce( (total, payment) => total + payment.price , 0);
+
+      const result = await paymentCollection.aggregate([
+        {
+          $group : {
+            _id : null, 
+            totalRevenue : {
+              $sum : '$price'
+            }
+          }
+        }
+      ]).toArray()
+
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenue
+      })
     })
 
     // crud //
